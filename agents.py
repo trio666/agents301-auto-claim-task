@@ -28,7 +28,7 @@ def load_authorizations_with_usernames(file_path):
     auth_with_usernames = [{'authorization': auth.strip(), 'username': extract_username(auth)} for auth in authorizations]
     return auth_with_usernames
 
-# Fungsi untuk klaim task
+# Fungsi untuk mengambil balance dan klaim task dari getTasks
 def claim_tasks(authorization, account_number, username):
     ua = UserAgent()
     headers = {
@@ -40,44 +40,57 @@ def claim_tasks(authorization, account_number, username):
         'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7'
     }
 
-    url_get_tasks = 'https://api.agent301.org/getMe'
-    response = requests.post(url_get_tasks, headers=headers)
+    # Ambil data dari /getMe
+    url_get_me = 'https://api.agent301.org/getMe'
+    response_me = requests.post(url_get_me, headers=headers)
     
-    if response.status_code == 200:
-        json_response = response.json()
-        if json_response.get("ok"):
-            result = json_response.get("result", {})
+    if response_me.status_code == 200:
+        json_response_me = response_me.json()
+        if json_response_me.get("ok"):
+            result = json_response_me.get("result", {})
             balance = result.get("balance", 0)
             print(f"#ACCOUNT {username} | BALANCE: {balance} AP")
             print("MENJALANKAN AUTO CLAIM TASK...\n")
 
-            tasks = result.get("tasks", [])
-            for task in tasks:
-                task_type = task.get("type")
-                title = task.get("title")
-                reward = task.get("reward", 0)
-                is_claimed = task.get("is_claimed")
-                count = task.get("count", 0)
-                max_count = task.get("max_count")
+            # Ambil task dari /getTasks
+            url_get_tasks = 'https://api.agent301.org/getTasks'
+            response_tasks = requests.post(url_get_tasks, headers=headers)
+            
+            if response_tasks.status_code == 200:
+                json_response_tasks = response_tasks.json()
+                if json_response_tasks.get("ok"):
+                    tasks = json_response_tasks.get("result", {}).get("data", [])
+                    
+                    for task in tasks:
+                        task_type = task.get("type")
+                        title = task.get("title")
+                        reward = task.get("reward", 0)
+                        is_claimed = task.get("is_claimed")
+                        count = task.get("count", 0)
+                        max_count = task.get("max_count")
 
-                if max_count is None and not is_claimed:
-                    claim_task(headers, task_type, title)
+                        if max_count is None and not is_claimed:
+                            claim_task(headers, task_type, title)
 
-                elif task_type == "video" and count < max_count:
-                    while count < max_count:
-                        print(f"#TASK {task_type} - {title} PROGRESS: {count}/{max_count}")
-                        if claim_task(headers, task_type, title):
-                            count += 1
-                        else:
-                            break
+                        elif task_type == "video" and count < max_count:
+                            while count < max_count:
+                                print(f"#TASK {task_type} - {title} PROGRESS: {count}/{max_count}")
+                                if claim_task(headers, task_type, title):
+                                    count += 1
+                                else:
+                                    break
 
-                elif not is_claimed and count >= max_count:
-                    claim_task(headers, task_type, title)
-            print("\nSEMUA TASK BERHASIL DICLAIM!")
+                        elif not is_claimed and count >= max_count:
+                            claim_task(headers, task_type, title)
+                    print("\nSEMUA TASK BERHASIL DICLAIM!")
+                else:
+                    print("GAGAL MENGAMBIL TASK. SILAHKAN ULANGI.")
+            else:
+                print(f"# HTTP Error (getTasks): {response_tasks.status_code}")
         else:
-            print("GAGAL MENGAMBIL TASK. SILAHKAN ULANGI.")
+            print("GAGAL MENGAMBIL DATA ACCOUNT. SILAHKAN ULANGI.")
     else:
-        print(f"# HTTP Error: {response.status_code}")
+        print(f"# HTTP Error (getMe): {response_me.status_code}")
 
 def claim_task(headers, task_type, title):
     url_complete_task = 'https://api.agent301.org/completeTask'
